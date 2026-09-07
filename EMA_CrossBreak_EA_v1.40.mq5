@@ -54,12 +54,20 @@ enum ENUM_PROFIT_FILTER_MODE
 input group "=== 1. Pengaturan Timeframe & Indikator EMA ==="
 input ENUM_TIMEFRAMES    InpTimeframe           = PERIOD_CURRENT; // Timeframe Sinyal (PERIOD_CURRENT = Ikuti Chart)
 input ENUM_BREAKOUT_MODE InpBreakoutMode        = BREAKOUT_FLEXIBLE_2BAR; // Mode Penembusan Breakout EMA (1-Bar vs 2-Bar)
+
 input int                InpEmaFastPeriod       = 9;              // Periode Fast EMA
+input color              InpEmaFastColor        = clrRed;         // Warna Garis Fast EMA
+input int                InpEmaFastWidth        = 2;              // Ketebalan Garis Fast EMA (Pixels)
+
 input int                InpEmaSlowPeriod       = 17;             // Periode Slow EMA
-input int                InpEmaVisualPeriod     = 125;            // Periode Visual EMA (Hanya Tampilan Visual)
-input color              InpEmaVisualColor      = clrWhite;       // Warna Garis Visual EMA
-input int                InpEmaVisualWidth      = 2;              // Ketebalan Garis Visual EMA (Pixels)
-input bool               InpShowEmaOnChart      = true;           // Tampilkan Garis EMA 125 di Chart Otomatis
+input color              InpEmaSlowColor        = clrYellow;      // Warna Garis Slow EMA
+input int                InpEmaSlowWidth        = 2;              // Ketebalan Garis Slow EMA (Pixels)
+
+input int                InpEmaVisualPeriod     = 125;            // Periode Visual Trend EMA
+input color              InpEmaVisualColor      = clrWhite;       // Warna Garis Visual Trend EMA
+input int                InpEmaVisualWidth      = 2;              // Ketebalan Garis Visual Trend EMA (Pixels)
+
+input bool               InpShowEmaOnChart      = true;           // Tampilkan Ketiga Garis EMA di Chart Otomatis
 input ENUM_MA_METHOD     InpEmaMethod           = MODE_EMA;       // Metode MA (EMA)
 input ENUM_APPLIED_PRICE InpEmaAppliedPrice     = PRICE_CLOSE;    // Applied Price
 
@@ -127,8 +135,12 @@ CAccountInfo   m_account;
 
 int            h_emaFast = INVALID_HANDLE;
 int            h_emaSlow = INVALID_HANDLE;
-int            h_emaVisual = INVALID_HANDLE;
-string         g_visualIndicatorName = "";
+int            h_emaFastVisual = INVALID_HANDLE;
+int            h_emaSlowVisual = INVALID_HANDLE;
+int            h_emaTrendVisual = INVALID_HANDLE;
+string         g_visualFastName = "";
+string         g_visualSlowName = "";
+string         g_visualTrendName = "";
 datetime       g_lastBarTime = 0;
 
 int CloseAllOrders();
@@ -174,23 +186,25 @@ int OnInit()
       return(INIT_FAILED);
      }
 
-   // Buat Handle Indikator EMA 125 Visual (Garis Putih di Chart)
-   g_visualIndicatorName = StringFormat("EMA_Visual(%d)", InpEmaVisualPeriod);
-   h_emaVisual = iCustom(_Symbol, tf, "EMA_Visual_Line", InpEmaVisualPeriod, InpEmaMethod, InpEmaAppliedPrice, InpEmaVisualColor, InpEmaVisualWidth);
-   if(h_emaVisual == INVALID_HANDLE)
+   // Buat Handle Indikator Visual untuk Tampilan Chart dengan Warna Kustom
+   g_visualFastName  = StringFormat("EMA_Visual(%d)", InpEmaFastPeriod);
+   g_visualSlowName  = StringFormat("EMA_Visual(%d)", InpEmaSlowPeriod);
+   g_visualTrendName = StringFormat("EMA_Visual(%d)", InpEmaVisualPeriod);
+
+   h_emaFastVisual  = iCustom(_Symbol, tf, "EMA_Visual_Line", InpEmaFastPeriod, InpEmaMethod, InpEmaAppliedPrice, InpEmaFastColor, InpEmaFastWidth);
+   h_emaSlowVisual  = iCustom(_Symbol, tf, "EMA_Visual_Line", InpEmaSlowPeriod, InpEmaMethod, InpEmaAppliedPrice, InpEmaSlowColor, InpEmaSlowWidth);
+   h_emaTrendVisual = iCustom(_Symbol, tf, "EMA_Visual_Line", InpEmaVisualPeriod, InpEmaMethod, InpEmaAppliedPrice, InpEmaVisualColor, InpEmaVisualWidth);
+
+   // Tampilkan Ketiga Garis EMA ke chart jika diaktifkan
+   if(InpShowEmaOnChart)
      {
-      // Fallback ke iMA standar jika custom indicator belum siap
-      h_emaVisual = iMA(_Symbol, tf, InpEmaVisualPeriod, 0, InpEmaMethod, InpEmaAppliedPrice);
+      if(h_emaFastVisual != INVALID_HANDLE)  ChartIndicatorAdd(0, 0, h_emaFastVisual);
+      if(h_emaSlowVisual != INVALID_HANDLE)  ChartIndicatorAdd(0, 0, h_emaSlowVisual);
+      if(h_emaTrendVisual != INVALID_HANDLE) ChartIndicatorAdd(0, 0, h_emaTrendVisual);
      }
 
-   // Tampilkan Garis EMA 125 ke chart jika diaktifkan
-   if(InpShowEmaOnChart && h_emaVisual != INVALID_HANDLE)
-     {
-      ChartIndicatorAdd(0, 0, h_emaVisual);
-     }
-
-   PrintFormat("EMA_CrossBreak_EA berhasil dimuat | Simbol: %s | Timeframe Sinyal: %s | Visual EMA: %d", 
-               _Symbol, EnumToString(tf), InpEmaVisualPeriod);
+   PrintFormat("EMA_CrossBreak_EA v1.40 berhasil dimuat | Simbol: %s | Timeframe: %s | EMA: %d & %d | Trend: %d", 
+               _Symbol, EnumToString(tf), InpEmaFastPeriod, InpEmaSlowPeriod, InpEmaVisualPeriod);
 
    // Buat Tombol Close All di Chart
    if(InpShowCloseAllBtn)
@@ -208,11 +222,23 @@ void OnDeinit(const int reason)
   {
    if(h_emaFast != INVALID_HANDLE) IndicatorRelease(h_emaFast);
    if(h_emaSlow != INVALID_HANDLE) IndicatorRelease(h_emaSlow);
-   if(h_emaVisual != INVALID_HANDLE)
+
+   if(h_emaFastVisual != INVALID_HANDLE)
      {
-      ChartIndicatorDelete(0, 0, g_visualIndicatorName);
-      IndicatorRelease(h_emaVisual);
+      ChartIndicatorDelete(0, 0, g_visualFastName);
+      IndicatorRelease(h_emaFastVisual);
      }
+   if(h_emaSlowVisual != INVALID_HANDLE)
+     {
+      ChartIndicatorDelete(0, 0, g_visualSlowName);
+      IndicatorRelease(h_emaSlowVisual);
+     }
+   if(h_emaTrendVisual != INVALID_HANDLE)
+     {
+      ChartIndicatorDelete(0, 0, g_visualTrendName);
+      IndicatorRelease(h_emaTrendVisual);
+     }
+
    DestroyCloseAllButton();
    Comment("");
   }
@@ -1026,7 +1052,7 @@ void UpdateDashboard(ENUM_TIMEFRAMES tf)
    CopyBuffer(h_emaFast, 0, 1, 1, emaF);
    CopyBuffer(h_emaSlow, 0, 1, 1, emaS);
    double emaValVisual = 0.0;
-   if(h_emaVisual != INVALID_HANDLE && CopyBuffer(h_emaVisual, 0, 1, 1, emaV) > 0)
+   if(h_emaTrendVisual != INVALID_HANDLE && CopyBuffer(h_emaTrendVisual, 0, 1, 1, emaV) > 0)
       emaValVisual = emaV[0];
 
    string slDesc = (InpSLMode == SL_MODE_POINTS) ? 
@@ -1089,9 +1115,9 @@ void UpdateDashboard(ENUM_TIMEFRAMES tf)
                  "========================================\n" +
                  " Simbol        : " + _Symbol + "\n" +
                  " TF Sinyal     : " + EnumToString(tf) + ((InpTimeframe == PERIOD_CURRENT) ? " (Chart)" : " (Locked)") + "\n" +
-                 " EMA " + IntegerToString(InpEmaFastPeriod) + " (Shift 1): " + DoubleToString(emaF[0], _Digits) + "\n" +
-                 " EMA " + IntegerToString(InpEmaSlowPeriod) + " (Shift 1): " + DoubleToString(emaS[0], _Digits) + "\n" +
-                 " EMA " + IntegerToString(InpEmaVisualPeriod) + " (Visual) : " + DoubleToString(emaValVisual, _Digits) + " (Putih)\n" +
+                 " EMA " + IntegerToString(InpEmaFastPeriod) + " (Fast)   : " + DoubleToString(emaF[0], _Digits) + "\n" +
+                 " EMA " + IntegerToString(InpEmaSlowPeriod) + " (Slow)   : " + DoubleToString(emaS[0], _Digits) + "\n" +
+                 " EMA " + IntegerToString(InpEmaVisualPeriod) + " (Trend)  : " + DoubleToString(emaValVisual, _Digits) + "\n" +
                  " Spread        : " + IntegerToString(m_symbol.Spread()) + " Points\n" +
                  " Posisi BUY    : " + IntegerToString(buyCount) + " Posisi\n" +
                  " Posisi SELL   : " + IntegerToString(sellCount) + " Posisi\n" +
