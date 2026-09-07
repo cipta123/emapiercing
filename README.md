@@ -13,8 +13,9 @@ Dikembangkan dan dioptimalkan khusus untuk instrumen **Gold (XAUUSD)** pada time
 | **`EMA_CrossBreak_EA.mq5`** | v1.00 | Versi dasar: Piercing 1-Bar, Stacking, Filter Validasi Profit Searah, Basket TP Reguler, Martingale opsional, Tombol Close All di Chart. |
 | **`EMA_CrossBreak_EA_v1.20.mq5`** | v1.20 | Tambahan **Filter ATR / Ukuran Body**: Hanya mengeksekusi jika ukuran body candle penembus $\ge X \times \text{ATR}$ (menghindari candle kecil/doji). |
 | **`EMA_CrossBreak_EA_v1.30.mq5`** | v1.30 | Tambahan **Filter Tren / Reversal EMA 125**: Pilihan mode tren (hanya Buy di atas EMA 125) atau reversal (hanya Sell di atas EMA 125). |
-| **`EMA_CrossBreak_EA_v1.40.mq5`** | v1.40 | Tambahan **Mode Breakout Fleksibel (2-Bar Step)**: Mengakomodasi penembusan bertahap 2 candle tanpa kehilangan momen saat harga langsung melesat naik/turun. |
-| **`EMA_Visual_Line.mq5`** | Custom Indicator | Indikator pembantu untuk menggambar garis visual EMA 125 warna putih secara otomatis di chart. |
+| **`EMA_CrossBreak_EA_v1.40.mq5`** | v1.40 | Tambahan **Mode Breakout Fleksibel (2-Bar Step)** + Kustomisasi Warna/Ketebalan 3 Garis EMA langsung dari input properties. |
+| **`EMA_CrossBreak_EA_v1.50.mq5`** | v1.50 | Tambahan **Mode Alur Selang-Seling (Strict Alternating BUY <-> SELL)**: Setelah membuka BUY tidak boleh membuka BUY lagi, wajib menunggu sinyal SELL, begitu pula sebaliknya. |
+| **`EMA_Visual_Line.mq5`** | Custom Indicator | Indikator pembantu untuk menggambar garis visual EMA warna kustom secara otomatis di chart. |
 
 ---
 
