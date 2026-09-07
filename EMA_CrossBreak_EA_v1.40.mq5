@@ -300,6 +300,8 @@ void CheckSignalAndExecute(ENUM_TIMEFRAMES tf)
 
    double openBar2  = rates[1].open;
    double closeBar2 = rates[1].close;
+   double highBar2  = rates[1].high;
+   double lowBar2   = rates[1].low;
 
    // Ambil nilai EMA 9 & EMA 17 pada Shift 1 dan Shift 2
    double emaFastBuffer[];
@@ -327,7 +329,7 @@ void CheckSignalAndExecute(ENUM_TIMEFRAMES tf)
    bool buySignal  = false;
    bool sellSignal = false;
 
-   // 1. Kondisi Strict 1-Bar Piercing
+   // 1. Kondisi Strict 1-Bar Piercing (1 Candle Melompat Penuh Menembus Kedua EMA)
    bool strictBuy  = (openBar1 < minEMA1 && closeBar1 > maxEMA1);
    bool strictSell = (openBar1 > maxEMA1 && closeBar1 < minEMA1);
 
@@ -338,12 +340,24 @@ void CheckSignalAndExecute(ENUM_TIMEFRAMES tf)
      }
    else // BREAKOUT_FLEXIBLE_2BAR
      {
-      // Penembusan 2-Bar Bertahap:
-      // BUY: Candle 2 bar lalu Close di bawah kedua EMA, Candle 1 bar lalu Close di atas kedua EMA & Candle Bullish
-      bool multi2Buy  = (closeBar2 < minEMA2 && closeBar1 > maxEMA1 && closeBar1 > openBar1);
+      // Penembusan 2-Step Bertahap (Masuk Terowongan -> Keluar Menembus):
+      // BUY:
+      // - Candle 2 bar lalu: Berada di bawah atau menyentuh bawah EMA (Open/Low/Close <= minEMA2), dan belum menembus keluar atas (Close <= maxEMA2)
+      // - Candle 1 bar lalu: Open di dalam/bawah area EMA (Open <= maxEMA1), melesat menembus keluar di atas kedua EMA (Close > maxEMA1), dan Bullish (Close > Open)
+      bool multi2Buy  = ((openBar2 <= minEMA2 || lowBar2 <= minEMA2 || closeBar2 <= minEMA2) &&
+                         (closeBar2 <= maxEMA2) &&
+                         (openBar1 <= maxEMA1) &&
+                         (closeBar1 > maxEMA1) &&
+                         (closeBar1 > openBar1));
 
-      // SELL: Candle 2 bar lalu Close di atas kedua EMA, Candle 1 bar lalu Close di bawah kedua EMA & Candle Bearish
-      bool multi2Sell = (closeBar2 > maxEMA2 && closeBar1 < minEMA1 && closeBar1 < openBar1);
+      // SELL:
+      // - Candle 2 bar lalu: Berada di atas atau menyentuh atas EMA (Open/High/Close >= maxEMA2), dan belum menembus keluar bawah (Close >= minEMA2)
+      // - Candle 1 bar lalu: Open di dalam/atas area EMA (Open >= minEMA1), terjun menembus keluar di bawah kedua EMA (Close < minEMA1), dan Bearish (Close < Open)
+      bool multi2Sell = ((openBar2 >= maxEMA2 || highBar2 >= maxEMA2 || closeBar2 >= maxEMA2) &&
+                         (closeBar2 >= minEMA2) &&
+                         (openBar1 >= minEMA1) &&
+                         (closeBar1 < minEMA1) &&
+                         (closeBar1 < openBar1));
 
       buySignal  = (strictBuy || multi2Buy);
       sellSignal = (strictSell || multi2Sell);
