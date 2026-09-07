@@ -342,20 +342,20 @@ void CheckSignalAndExecute(ENUM_TIMEFRAMES tf)
      {
       // Penembusan 2-Step Bertahap (Masuk Terowongan -> Keluar Menembus):
       // BUY:
-      // - Candle 2 bar lalu: Berada di bawah atau menyentuh bawah EMA (Open/Low/Close <= minEMA2), dan belum menembus keluar atas (Close <= maxEMA2)
-      // - Candle 1 bar lalu: Open di dalam/bawah area EMA (Open <= maxEMA1), melesat menembus keluar di atas kedua EMA (Close > maxEMA1), dan Bullish (Close > Open)
+      // - Candle 2 bar lalu: Berada di bawah atau menyentuh bawah EMA (Open/Low/Close <= minEMA2), dan belum reli jauh di atas (Low2 <= maxEMA2 atau Close2 <= maxEMA2)
+      // - Candle 1 bar lalu: Berangkat dari area EMA (Open <= maxEMA1 atau Low <= maxEMA1), meledak menembus keluar di atas kedua EMA (Close > maxEMA1), dan Bullish (Close > Open)
       bool multi2Buy  = ((openBar2 <= minEMA2 || lowBar2 <= minEMA2 || closeBar2 <= minEMA2) &&
-                         (closeBar2 <= maxEMA2) &&
-                         (openBar1 <= maxEMA1) &&
+                         (lowBar2 <= maxEMA2 || closeBar2 <= maxEMA2) &&
+                         (openBar1 <= maxEMA1 || lowBar1 <= maxEMA1) &&
                          (closeBar1 > maxEMA1) &&
                          (closeBar1 > openBar1));
 
       // SELL:
-      // - Candle 2 bar lalu: Berada di atas atau menyentuh atas EMA (Open/High/Close >= maxEMA2), dan belum menembus keluar bawah (Close >= minEMA2)
-      // - Candle 1 bar lalu: Open di dalam/atas area EMA (Open >= minEMA1), terjun menembus keluar di bawah kedua EMA (Close < minEMA1), dan Bearish (Close < Open)
+      // - Candle 2 bar lalu: Berada di atas atau menyentuh atas EMA (Open/High/Close >= maxEMA2), dan belum terjun jauh di bawah (High2 >= minEMA2 atau Close2 >= minEMA2)
+      // - Candle 1 bar lalu: Berangkat dari area EMA (Open >= minEMA1 atau High >= minEMA1), terjun menembus keluar di bawah kedua EMA (Close < minEMA1), dan Bearish (Close < Open)
       bool multi2Sell = ((openBar2 >= maxEMA2 || highBar2 >= maxEMA2 || closeBar2 >= maxEMA2) &&
-                         (closeBar2 >= minEMA2) &&
-                         (openBar1 >= minEMA1) &&
+                         (highBar2 >= minEMA2 || closeBar2 >= minEMA2) &&
+                         (openBar1 >= minEMA1 || highBar1 >= minEMA1) &&
                          (closeBar1 < minEMA1) &&
                          (closeBar1 < openBar1));
 
