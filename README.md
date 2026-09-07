@@ -15,6 +15,7 @@ Dikembangkan dan dioptimalkan khusus untuk instrumen **Gold (XAUUSD)** pada time
 | **`EMA_CrossBreak_EA_v1.30.mq5`** | v1.30 | Tambahan **Filter Tren / Reversal EMA 125**: Pilihan mode tren (hanya Buy di atas EMA 125) atau reversal (hanya Sell di atas EMA 125). |
 | **`EMA_CrossBreak_EA_v1.40.mq5`** | v1.40 | Tambahan **Mode Breakout Fleksibel (2-Bar Step)** + Kustomisasi Warna/Ketebalan 3 Garis EMA langsung dari input properties. |
 | **`EMA_CrossBreak_EA_v1.50.mq5`** | v1.50 | Tambahan **Mode Alur Selang-Seling (Strict Alternating BUY <-> SELL)**: Setelah membuka BUY tidak boleh membuka BUY lagi, wajib menunggu sinyal SELL, begitu pula sebaliknya. |
+| **`EMA_CrossBreak_EA_v1.60.mq5`** | v1.60 | Inovasi **Pending Stop Trap (Zero-Lag)**: Berbasis kode dasar v1.00, memasang **SELL STOP** di garis terluar bawah saat harga di atas, dan **BUY STOP** di garis terluar atas saat harga di bawah, tereksekusi instan saat tertembus tanpa tunggu close candle. |
 | **`EMA_Visual_Line.mq5`** | Custom Indicator | Indikator pembantu untuk menggambar garis visual EMA warna kustom secara otomatis di chart. |
 
 ---
