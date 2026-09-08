@@ -121,7 +121,6 @@ CAccountInfo   m_account;
 int            h_emaFast = INVALID_HANDLE;
 int            h_emaSlow = INVALID_HANDLE;
 int            h_emaVisual = INVALID_HANDLE;
-string         g_visualIndicatorName = "";
 datetime       g_lastBarTime = 0;
 
 int CloseAllOrders();
@@ -167,14 +166,8 @@ int OnInit()
       return(INIT_FAILED);
      }
 
-   // Buat Handle Indikator EMA 125 Visual (Garis Putih di Chart)
-   g_visualIndicatorName = StringFormat("EMA_Visual(%d)", InpEmaVisualPeriod);
-   h_emaVisual = iCustom(_Symbol, tf, "EMA_Visual_Line", InpEmaVisualPeriod, InpEmaMethod, InpEmaAppliedPrice, InpEmaVisualColor, InpEmaVisualWidth);
-   if(h_emaVisual == INVALID_HANDLE)
-     {
-      // Fallback ke iMA standar jika custom indicator belum siap
-      h_emaVisual = iMA(_Symbol, tf, InpEmaVisualPeriod, 0, InpEmaMethod, InpEmaAppliedPrice);
-     }
+   // Buat Handle Indikator EMA 125 Visual (Native MT5, tanpa dependensi file eksternal)
+   h_emaVisual = iMA(_Symbol, tf, InpEmaVisualPeriod, 0, InpEmaMethod, InpEmaAppliedPrice);
 
    // Tampilkan Garis EMA 125 ke chart jika diaktifkan
    if(InpShowEmaOnChart && h_emaVisual != INVALID_HANDLE)
@@ -199,13 +192,9 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
-   if(h_emaFast != INVALID_HANDLE) IndicatorRelease(h_emaFast);
-   if(h_emaSlow != INVALID_HANDLE) IndicatorRelease(h_emaSlow);
-   if(h_emaVisual != INVALID_HANDLE)
-     {
-      ChartIndicatorDelete(0, 0, g_visualIndicatorName);
-      IndicatorRelease(h_emaVisual);
-     }
+   if(h_emaFast != INVALID_HANDLE)   IndicatorRelease(h_emaFast);
+   if(h_emaSlow != INVALID_HANDLE)   IndicatorRelease(h_emaSlow);
+   if(h_emaVisual != INVALID_HANDLE) IndicatorRelease(h_emaVisual);
    DestroyCloseAllButton();
    Comment("");
   }
