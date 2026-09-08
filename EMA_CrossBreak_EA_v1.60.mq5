@@ -130,13 +130,7 @@ CAccountInfo   m_account;
 
 int            h_emaFast = INVALID_HANDLE;
 int            h_emaSlow = INVALID_HANDLE;
-int            h_emaFastVisual = INVALID_HANDLE;
-int            h_emaSlowVisual = INVALID_HANDLE;
-int            h_emaTrendVisual = INVALID_HANDLE;
-
-string         g_visualFastName = "";
-string         g_visualSlowName = "";
-string         g_visualTrendName = "";
+int            h_emaTrend = INVALID_HANDLE;
 datetime       g_lastBarTime = 0;
 
 int CloseAllOrders();
@@ -173,34 +167,26 @@ int OnInit()
 
    ENUM_TIMEFRAMES tf = GetEffectiveTimeframe();
 
-   // Buat Handle Indikator EMA 9 & EMA 17 pada Timeframe yang dipilih
-   h_emaFast = iMA(_Symbol, tf, InpEmaFastPeriod, 0, InpEmaMethod, InpEmaAppliedPrice);
-   h_emaSlow = iMA(_Symbol, tf, InpEmaSlowPeriod, 0, InpEmaMethod, InpEmaAppliedPrice);
+   // Buat Handle Indikator EMA 9, EMA 17, dan Visual Trend EMA (Native MT5, tanpa dependency file eksternal)
+   h_emaFast  = iMA(_Symbol, tf, InpEmaFastPeriod, 0, InpEmaMethod, InpEmaAppliedPrice);
+   h_emaSlow  = iMA(_Symbol, tf, InpEmaSlowPeriod, 0, InpEmaMethod, InpEmaAppliedPrice);
+   h_emaTrend = iMA(_Symbol, tf, InpEmaVisualPeriod, 0, InpEmaMethod, InpEmaAppliedPrice);
 
-   if(h_emaFast == INVALID_HANDLE || h_emaSlow == INVALID_HANDLE)
+   if(h_emaFast == INVALID_HANDLE || h_emaSlow == INVALID_HANDLE || h_emaTrend == INVALID_HANDLE)
      {
       Print("Error: Gagal membuat handle indikator EMA.");
       return(INIT_FAILED);
      }
 
-   // Buat Handle Indikator Visual untuk Tampilan Chart dengan Warna Kustom
-   g_visualFastName  = StringFormat("EMA_Visual(%d)", InpEmaFastPeriod);
-   g_visualSlowName  = StringFormat("EMA_Visual(%d)", InpEmaSlowPeriod);
-   g_visualTrendName = StringFormat("EMA_Visual(%d)", InpEmaVisualPeriod);
-
-   h_emaFastVisual  = iCustom(_Symbol, tf, "EMA_Visual_Line", InpEmaFastPeriod, InpEmaMethod, InpEmaAppliedPrice, InpEmaFastColor, InpEmaFastWidth);
-   h_emaSlowVisual  = iCustom(_Symbol, tf, "EMA_Visual_Line", InpEmaSlowPeriod, InpEmaMethod, InpEmaAppliedPrice, InpEmaSlowColor, InpEmaSlowWidth);
-   h_emaTrendVisual = iCustom(_Symbol, tf, "EMA_Visual_Line", InpEmaVisualPeriod, InpEmaMethod, InpEmaAppliedPrice, InpEmaVisualColor, InpEmaVisualWidth);
-
    if(InpShowEmaOnChart)
      {
-      if(h_emaFastVisual != INVALID_HANDLE)  ChartIndicatorAdd(0, 0, h_emaFastVisual);
-      if(h_emaSlowVisual != INVALID_HANDLE)  ChartIndicatorAdd(0, 0, h_emaSlowVisual);
-      if(h_emaTrendVisual != INVALID_HANDLE) ChartIndicatorAdd(0, 0, h_emaTrendVisual);
+      if(h_emaFast != INVALID_HANDLE)  ChartIndicatorAdd(0, 0, h_emaFast);
+      if(h_emaSlow != INVALID_HANDLE)  ChartIndicatorAdd(0, 0, h_emaSlow);
+      if(h_emaTrend != INVALID_HANDLE) ChartIndicatorAdd(0, 0, h_emaTrend);
      }
 
-   PrintFormat("EMA_CrossBreak_EA v1.60 berhasil dimuat | Simbol: %s | Timeframe: %s | Fast: %d | Slow: %d", 
-               _Symbol, EnumToString(tf), InpEmaFastPeriod, InpEmaSlowPeriod);
+   PrintFormat("EMA_CrossBreak_EA v1.60 berhasil dimuat | Simbol: %s | Timeframe: %s | Fast: %d | Slow: %d | Trend: %d", 
+               _Symbol, EnumToString(tf), InpEmaFastPeriod, InpEmaSlowPeriod, InpEmaVisualPeriod);
 
    // Buat Tombol Close All di Chart
    if(InpShowCloseAllBtn)
@@ -216,23 +202,20 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
-   if(h_emaFast != INVALID_HANDLE) IndicatorRelease(h_emaFast);
-   if(h_emaSlow != INVALID_HANDLE) IndicatorRelease(h_emaSlow);
-
-   if(h_emaFastVisual != INVALID_HANDLE)
+   if(h_emaFast != INVALID_HANDLE)
      {
-      ChartIndicatorDelete(0, 0, g_visualFastName);
-      IndicatorRelease(h_emaFastVisual);
+      IndicatorRelease(h_emaFast);
+      h_emaFast = INVALID_HANDLE;
      }
-   if(h_emaSlowVisual != INVALID_HANDLE)
+   if(h_emaSlow != INVALID_HANDLE)
      {
-      ChartIndicatorDelete(0, 0, g_visualSlowName);
-      IndicatorRelease(h_emaSlowVisual);
+      IndicatorRelease(h_emaSlow);
+      h_emaSlow = INVALID_HANDLE;
      }
-   if(h_emaTrendVisual != INVALID_HANDLE)
+   if(h_emaTrend != INVALID_HANDLE)
      {
-      ChartIndicatorDelete(0, 0, g_visualTrendName);
-      IndicatorRelease(h_emaTrendVisual);
+      IndicatorRelease(h_emaTrend);
+      h_emaTrend = INVALID_HANDLE;
      }
 
    // Hapus pending order saat EA di-remove
@@ -1198,7 +1181,7 @@ void UpdateDashboard(ENUM_TIMEFRAMES tf)
    CopyBuffer(h_emaFast, 0, 1, 1, emaF);
    CopyBuffer(h_emaSlow, 0, 1, 1, emaS);
    double emaValVisual = 0.0;
-   if(h_emaTrendVisual != INVALID_HANDLE && CopyBuffer(h_emaTrendVisual, 0, 0, 1, emaV) > 0)
+   if(h_emaTrend != INVALID_HANDLE && CopyBuffer(h_emaTrend, 0, 0, 1, emaV) > 0)
       emaValVisual = emaV[0];
 
    string slDesc = (InpSLMode == SL_MODE_POINTS) ? 
