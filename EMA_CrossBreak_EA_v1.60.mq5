@@ -370,6 +370,7 @@ void SyncPendingOrder(ENUM_ORDER_TYPE targetType, double targetPrice)
    double foundPrice = 0.0;
    double foundSL    = 0.0;
    double foundTP    = 0.0;
+   double foundLot   = 0.0;
    int    pendingCount = 0;
 
    // Periksa pending order yang sudah ada dari EA ini
@@ -390,6 +391,7 @@ void SyncPendingOrder(ENUM_ORDER_TYPE targetType, double targetPrice)
                   foundPrice  = m_order.PriceOpen();
                   foundSL     = m_order.StopLoss();
                   foundTP     = m_order.TakeProfit();
+                  foundLot    = m_order.VolumeInitial();
                  }
                else
                  {
@@ -399,13 +401,6 @@ void SyncPendingOrder(ENUM_ORDER_TYPE targetType, double targetPrice)
               }
            }
         }
-     }
-
-   // Jika ada pending order bertipe salah (berlawanan), hapus order lama
-   if(foundTicket > 0 && foundType != targetType)
-     {
-      m_trade.OrderDelete(foundTicket);
-      foundTicket = 0;
      }
 
    // Hitung SL dan TP baru untuk targetPrice
@@ -421,26 +416,40 @@ void SyncPendingOrder(ENUM_ORDER_TYPE targetType, double targetPrice)
       if(InpTakeProfitPoints > 0) tp = NormalizeDouble(targetPrice - (InpTakeProfitPoints * _Point), _Digits);
      }
 
-   // Jika belum ada pending order, buka pending order baru
+   ENUM_POSITION_TYPE pType = (targetType == ORDER_TYPE_BUY_STOP) ? POSITION_TYPE_BUY : POSITION_TYPE_SELL;
+   double targetLot = CalculateLotSize(targetPrice, sl, pType);
+
+   // Jika ada pending order bertipe salah ATAU ukuran lot-nya tidak sesuai dengan targetLot
+   // (misalnya setelah TP tercapai, circle selesai dan reset ke 0.01, atau perubahan step martingale),
+   // hapus pending order lama agar dipasang ulang dengan lot yang benar!
+   if(foundTicket > 0)
+     {
+      if(foundType != targetType || MathAbs(foundLot - targetLot) > 0.0001)
+        {
+         PrintFormat("RESET PENDING ORDER: Lot/Tipe Berubah (Lama: %.2f | Baru: %.2f). Menghapus pending #%I64u...",
+                     foundLot, targetLot, foundTicket);
+         m_trade.OrderDelete(foundTicket);
+         foundTicket = 0;
+        }
+     }
+
+   // Jika belum ada pending order, buka pending order baru dengan lot yang sesuai
    if(foundTicket == 0)
      {
-      ENUM_POSITION_TYPE pType = (targetType == ORDER_TYPE_BUY_STOP) ? POSITION_TYPE_BUY : POSITION_TYPE_SELL;
-      double lot = CalculateLotSize(targetPrice, sl, pType);
-
       if(targetType == ORDER_TYPE_BUY_STOP)
         {
-         if(m_trade.BuyStop(lot, targetPrice, _Symbol, sl, tp, ORDER_TIME_GTC, 0, InpTradeComment))
-            PrintFormat("Pasang BUY STOP di Garis MaxEMA: %s | Harga: %.2f | Lot: %.2f", _Symbol, targetPrice, lot);
+         if(m_trade.BuyStop(targetLot, targetPrice, _Symbol, sl, tp, ORDER_TIME_GTC, 0, InpTradeComment))
+            PrintFormat("Pasang BUY STOP di Garis MaxEMA: %s | Harga: %.2f | Lot: %.2f", _Symbol, targetPrice, targetLot);
         }
       else if(targetType == ORDER_TYPE_SELL_STOP)
         {
-         if(m_trade.SellStop(lot, targetPrice, _Symbol, sl, tp, ORDER_TIME_GTC, 0, InpTradeComment))
-            PrintFormat("Pasang SELL STOP di Garis MinEMA: %s | Harga: %.2f | Lot: %.2f", _Symbol, targetPrice, lot);
+         if(m_trade.SellStop(targetLot, targetPrice, _Symbol, sl, tp, ORDER_TIME_GTC, 0, InpTradeComment))
+            PrintFormat("Pasang SELL STOP di Garis MinEMA: %s | Harga: %.2f | Lot: %.2f", _Symbol, targetPrice, targetLot);
         }
      }
    else
      {
-      // Jika pending order sudah ada dan harganya bergeser melampaui ambang threshold
+      // Jika pending order sudah ada dan lot-nya sudah sesuai, cukup update harga dan SL/TP
       double priceDiffPoints = MathAbs(foundPrice - targetPrice) / _Point;
       if(priceDiffPoints >= InpModifyThresholdPts)
         {
@@ -465,18 +474,28 @@ void AdjustPendingOrderInTunnel(double minEMA, double maxEMA, double stopLevelOf
          if(m_order.Symbol() == _Symbol && m_order.Magic() == InpMagicNumber)
            {
             ENUM_ORDER_TYPE oType = m_order.OrderType();
-            ulong ticket = m_order.Ticket();
+            ulong ticket   = m_order.Ticket();
             double curOpen = m_order.PriceOpen();
+            double curLot  = m_order.VolumeInitial();
 
             if(oType == ORDER_TYPE_BUY_STOP)
               {
                double targetPrice = NormalizeDouble(maxEMA + (InpStopBufferPoints * _Point), _Digits);
                if(targetPrice - ask < stopLevelOffset) targetPrice = NormalizeDouble(ask + stopLevelOffset, _Digits);
 
-               if(MathAbs(curOpen - targetPrice) / _Point >= InpModifyThresholdPts)
+               double sl = (InpStopLossPoints > 0) ? NormalizeDouble(targetPrice - (InpStopLossPoints * _Point), _Digits) : 0.0;
+               double tp = (InpTakeProfitPoints > 0) ? NormalizeDouble(targetPrice + (InpTakeProfitPoints * _Point), _Digits) : 0.0;
+               double targetLot = CalculateLotSize(targetPrice, sl, POSITION_TYPE_BUY);
+
+               if(MathAbs(curLot - targetLot) > 0.0001)
                  {
-                  double sl = (InpStopLossPoints > 0) ? NormalizeDouble(targetPrice - (InpStopLossPoints * _Point), _Digits) : 0.0;
-                  double tp = (InpTakeProfitPoints > 0) ? NormalizeDouble(targetPrice + (InpTakeProfitPoints * _Point), _Digits) : 0.0;
+                  PrintFormat("RESET TUNNEL PENDING: Lot berubah (Lama: %.2f | Baru: %.2f). Menghapus pending #%I64u...",
+                              curLot, targetLot, ticket);
+                  m_trade.OrderDelete(ticket);
+                  m_trade.BuyStop(targetLot, targetPrice, _Symbol, sl, tp, ORDER_TIME_GTC, 0, InpTradeComment);
+                 }
+               else if(MathAbs(curOpen - targetPrice) / _Point >= InpModifyThresholdPts)
+                 {
                   m_trade.OrderModify(ticket, targetPrice, sl, tp, ORDER_TIME_GTC, 0);
                  }
               }
@@ -485,10 +504,19 @@ void AdjustPendingOrderInTunnel(double minEMA, double maxEMA, double stopLevelOf
                double targetPrice = NormalizeDouble(minEMA - (InpStopBufferPoints * _Point), _Digits);
                if(bid - targetPrice < stopLevelOffset) targetPrice = NormalizeDouble(bid - stopLevelOffset, _Digits);
 
-               if(MathAbs(curOpen - targetPrice) / _Point >= InpModifyThresholdPts)
+               double sl = (InpStopLossPoints > 0) ? NormalizeDouble(targetPrice - (InpStopLossPoints * _Point), _Digits) : 0.0;
+               double tp = (InpTakeProfitPoints > 0) ? NormalizeDouble(targetPrice - (InpTakeProfitPoints * _Point), _Digits) : 0.0;
+               double targetLot = CalculateLotSize(targetPrice, sl, POSITION_TYPE_SELL);
+
+               if(MathAbs(curLot - targetLot) > 0.0001)
                  {
-                  double sl = (InpStopLossPoints > 0) ? NormalizeDouble(targetPrice + (InpStopLossPoints * _Point), _Digits) : 0.0;
-                  double tp = (InpTakeProfitPoints > 0) ? NormalizeDouble(targetPrice - (InpTakeProfitPoints * _Point), _Digits) : 0.0;
+                  PrintFormat("RESET TUNNEL PENDING: Lot berubah (Lama: %.2f | Baru: %.2f). Menghapus pending #%I64u...",
+                              curLot, targetLot, ticket);
+                  m_trade.OrderDelete(ticket);
+                  m_trade.SellStop(targetLot, targetPrice, _Symbol, sl, tp, ORDER_TIME_GTC, 0, InpTradeComment);
+                 }
+               else if(MathAbs(curOpen - targetPrice) / _Point >= InpModifyThresholdPts)
+                 {
                   m_trade.OrderModify(ticket, targetPrice, sl, tp, ORDER_TIME_GTC, 0);
                  }
               }
@@ -640,6 +668,9 @@ int GetLossStreakGlobal()
 
    int streak = 0;
    int totalDeals = HistoryDealsTotal();
+   datetime currentClusterTime = 0;
+   double clusterProfit = 0.0;
+   bool inCluster = false;
 
    for(int i = totalDeals - 1; i >= 0; i--)
      {
@@ -652,18 +683,49 @@ int GetLossStreakGlobal()
             ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
             if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_INOUT || entry == DEAL_ENTRY_OUT_BY)
               {
+               datetime dealTime = (datetime)HistoryDealGetInteger(dealTicket, DEAL_TIME);
                double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT)
                              + HistoryDealGetDouble(dealTicket, DEAL_SWAP)
                              + HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
 
-               if(profit < 0)
-                  streak++;
-               else if(profit > 0)
-                  break;
+               if(!inCluster)
+                 {
+                  currentClusterTime = dealTime;
+                  clusterProfit      = profit;
+                  inCluster          = true;
+                 }
+               else
+                 {
+                  // Jika deal ditutup bersamaan (basket close, selisih <= 3 detik)
+                  if(MathAbs(currentClusterTime - dealTime) <= 3)
+                    {
+                     clusterProfit += profit;
+                    }
+                  else
+                    {
+                     // Evaluasi hasil cluster penutupan sebelumnya
+                     if(clusterProfit > 0.0001)
+                        break; // Cluster terakhir profit (Win Circle) -> streak = 0!
+                     else if(clusterProfit < -0.0001)
+                        streak++;
+
+                     currentClusterTime = dealTime;
+                     clusterProfit      = profit;
+                    }
+                 }
               }
            }
         }
      }
+
+   if(inCluster)
+     {
+      if(clusterProfit > 0.0001)
+         return 0; // Siklus terakhir berujung profit bersih -> streak = 0
+      else if(clusterProfit < -0.0001)
+         streak++;
+     }
+
    return streak;
   }
 
@@ -677,6 +739,9 @@ int GetLossStreakByType(ENUM_POSITION_TYPE posType)
    int streak = 0;
    int totalDeals = HistoryDealsTotal();
    ENUM_DEAL_TYPE targetCloseDealType = (posType == POSITION_TYPE_BUY) ? DEAL_TYPE_SELL : DEAL_TYPE_BUY;
+   datetime currentClusterTime = 0;
+   double clusterProfit = 0.0;
+   bool inCluster = false;
 
    for(int i = totalDeals - 1; i >= 0; i--)
      {
@@ -692,19 +757,48 @@ int GetLossStreakByType(ENUM_POSITION_TYPE posType)
                ENUM_DEAL_TYPE dType = (ENUM_DEAL_TYPE)HistoryDealGetInteger(dealTicket, DEAL_TYPE);
                if(dType == targetCloseDealType)
                  {
+                  datetime dealTime = (datetime)HistoryDealGetInteger(dealTicket, DEAL_TIME);
                   double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT)
                                 + HistoryDealGetDouble(dealTicket, DEAL_SWAP)
                                 + HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
 
-                  if(profit < 0)
-                     streak++;
-                  else if(profit > 0)
-                     break;
+                  if(!inCluster)
+                    {
+                     currentClusterTime = dealTime;
+                     clusterProfit      = profit;
+                     inCluster          = true;
+                    }
+                  else
+                    {
+                     if(MathAbs(currentClusterTime - dealTime) <= 3)
+                       {
+                        clusterProfit += profit;
+                       }
+                     else
+                       {
+                        if(clusterProfit > 0.0001)
+                           break;
+                        else if(clusterProfit < -0.0001)
+                           streak++;
+
+                        currentClusterTime = dealTime;
+                        clusterProfit      = profit;
+                       }
+                    }
                  }
               }
            }
         }
      }
+
+   if(inCluster)
+     {
+      if(clusterProfit > 0.0001)
+         return 0;
+      else if(clusterProfit < -0.0001)
+         streak++;
+     }
+
    return streak;
   }
 
@@ -1087,6 +1181,7 @@ void ClosePositionsByType(ENUM_POSITION_TYPE posType)
            }
         }
      }
+   DeletePendingStopOrders();
   }
 
 //+------------------------------------------------------------------+
@@ -1343,6 +1438,7 @@ int CloseAllOrders()
            }
         }
      }
+   DeletePendingStopOrders();
    return closedCount;
   }
 
@@ -1365,6 +1461,38 @@ void OnChartEvent(const int id,
          // Kembalikan status tombol agar tidak terkunci (unpress)
          ObjectSetInteger(0, BTN_CLOSE_ALL_NAME, OBJPROP_STATE, false);
          ChartRedraw(0);
+        }
+     }
+  }
+
+//+------------------------------------------------------------------+
+//| TradeTransaction Handler: Deteksi Penutupan Posisi Seketika      |
+//+------------------------------------------------------------------+
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                         const MqlTradeRequest &request,
+                         const MqlTradeResult &result)
+  {
+   // Jika ada deal yang baru saja dieksekusi
+   if(trans.type == TRADE_TRANSACTION_DEAL_ADD)
+     {
+      if(HistoryDealSelect(trans.deal))
+        {
+         if(HistoryDealGetString(trans.deal, DEAL_SYMBOL) == _Symbol &&
+            HistoryDealGetInteger(trans.deal, DEAL_MAGIC) == InpMagicNumber)
+           {
+            ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
+            if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_INOUT || entry == DEAL_ENTRY_OUT_BY)
+              {
+               // Periksa apakah seluruh posisi aktif sudah tertutup (1 Circle Selesai)
+               int bCount = 0, sCount = 0;
+               CountCurrentPositions(bCount, sCount);
+               if(bCount + sCount == 0)
+                 {
+                  Print("1 CIRCLE SELESAI (TP/SL Tercapai): Seluruh posisi tertutup! Menghapus pending order lama untuk reset ke Lot Awal (0.01).");
+                  DeletePendingStopOrders();
+                 }
+              }
+           }
         }
      }
   }
